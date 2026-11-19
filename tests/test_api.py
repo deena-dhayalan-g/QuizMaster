@@ -194,3 +194,65 @@ def test_stats(client):
     assert stats["total_quizzes"] == 1
     assert stats["total_attempts"] == 1
     assert stats["quizzes"][0]["average_score"] == 1
+
+
+def _create_quiz(client, title="Sample Quiz"):
+    res = client.post("/api/quizzes", json={"title": title})
+    assert res.status_code == 201
+    return res.get_json()["id"]
+
+
+def _question_payload(text="What is 1+1?"):
+    return {
+        "text": text,
+        "option_a": "1",
+        "option_b": "2",
+        "option_c": "3",
+        "option_d": "4",
+        "correct_option": "B",
+    }
+
+
+def test_add_duplicate_question_same_quiz_returns_409(client):
+    quiz_id = _create_quiz(client)
+    payload = _question_payload("What is 1+1?")
+
+    first = client.post(f"/api/quizzes/{quiz_id}/questions", json=payload)
+    assert first.status_code == 201
+
+    duplicate = client.post(f"/api/quizzes/{quiz_id}/questions", json=payload)
+    assert duplicate.status_code == 409
+    assert "error" in duplicate.get_json()
+
+    # Confirm only one question was saved
+    quiz = client.get(f"/api/quizzes/{quiz_id}").get_json()
+    assert len(quiz["questions"]) == 1
+
+
+def test_add_duplicate_question_ignores_case_and_whitespace(client):
+    quiz_id = _create_quiz(client)
+
+    first = client.post(
+        f"/api/quizzes/{quiz_id}/questions",
+        json=_question_payload("What is 1+1?"),
+    )
+    assert first.status_code == 201
+
+    duplicate = client.post(
+        f"/api/quizzes/{quiz_id}/questions",
+        json=_question_payload("  what   is   1+1?  "),
+    )
+    assert duplicate.status_code == 409
+    assert "error" in duplicate.get_json()
+
+
+def test_add_same_question_to_different_quiz_allowed(client):
+    quiz_1 = _create_quiz(client, title="Quiz 1")
+    quiz_2 = _create_quiz(client, title="Quiz 2")
+    payload = _question_payload("What is 1+1?")
+
+    res_1 = client.post(f"/api/quizzes/{quiz_1}/questions", json=payload)
+    res_2 = client.post(f"/api/quizzes/{quiz_2}/questions", json=payload)
+
+    assert res_1.status_code == 201
+    assert res_2.status_code == 201
