@@ -22,8 +22,10 @@ def get_text(data, field):
         return ""
     return value.strip()
 
+
 def normalize_question_text(value: str) -> str:
     return re.sub(r"\s+", " ", value.strip()).lower()
+
 
 @pages.route("/")
 def index():
